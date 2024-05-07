@@ -495,6 +495,11 @@ type Options struct {
 	MEMProfile   string
 	BlockProfile string
 	MutexProfile string
+
+	WebsocketListenAddr   *listenAddress
+	WebsocketUnsafe       bool
+	WebsocketListenToAddr *string
+	WebsocketToUnsafe     bool
 }
 
 func filterNonEmpty(input []string) []string {
@@ -1207,7 +1212,7 @@ const (
 
 func init() {
 	executeRegexp = regexp.MustCompile(
-		`(?si)[:+](become|execute(?:-multi|-silent)?|reload(?:-sync)?|preview|(?:change|transform)-(?:header|query|prompt|border-label|preview-label)|transform|change-(?:preview-window|preview|multi)|(?:re|un)bind|pos|put|print)`)
+		`(?si)[:+](become|execute(?:-multi|-silent)?|reload(?:-sync)?|preview|(?:change|transform)-(?:header|query|prompt|border-label|preview-label)|transform|change-(?:preview-window|preview|multi)|(?:re|un)bind|pos|put|print)|websocket-broadcast`)
 	splitRegexp = regexp.MustCompile("[,:]+")
 	actionNameRegexp = regexp.MustCompile("(?i)^[a-z-]+")
 }
@@ -1599,6 +1604,10 @@ func isExecuteAction(str string) actionType {
 		return actTransformPrompt
 	case "transform-query":
 		return actTransformQuery
+	case "websocket-broadcast":
+		return actWebsocketBroadcast
+	case "websocket-stop-replay":
+		return actWebsocketStopReplay
 	}
 	return actIgnore
 }
@@ -2460,6 +2469,25 @@ func parseOptions(index *int, opts *Options, allArgs []string) error {
 		case "--no-listen", "--no-listen-unsafe":
 			opts.ListenAddr = nil
 			opts.Unsafe = false
+		case "--websocket-listen", "--websocket-listen-unsafe":
+			given, str := optionalNextString(allArgs, &i)
+			addr := defaultWebsocketListenAddr
+			if given {
+				var err error
+				addr, err = parseListenAddress(str)
+				if err != nil {
+					return err
+				}
+			}
+			opts.WebsocketListenAddr = &addr
+			opts.WebsocketUnsafe = arg == "--websocket-listen-unsafe"
+		case "--websocket-listen-to", "--websocket-listen-to-unsafe":
+			given, str := optionalNextString(allArgs, &i)
+			if given {
+				addr := &str
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = arg == "--websocket-listen-to-unsafe"
+			}
 		case "--clear":
 			opts.ClearOnExit = true
 		case "--no-clear":
@@ -2662,6 +2690,28 @@ func parseOptions(index *int, opts *Options, allArgs []string) error {
 				}
 				opts.ListenAddr = &addr
 				opts.Unsafe = true
+			} else if match, value := optString(arg, "--websocket-listen="); match {
+				addr, err := parseListenAddress(value)
+				if err != nil {
+					return err
+				}
+				opts.WebsocketListenAddr = &addr
+				opts.WebsocketUnsafe = false
+			} else if match, value := optString(arg, "--websocket-listen-unsafe="); match {
+				addr, err := parseListenAddress(value)
+				if err != nil {
+					return err
+				}
+				opts.WebsocketListenAddr = &addr
+				opts.WebsocketUnsafe = true
+			} else if match, value := optString(arg, "--websocket-listen-to="); match {
+				addr := &value
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = false
+			} else if match, value := optString(arg, "--websocket-listen-to-unsafe="); match {
+				addr := &value
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = true
 			} else if match, value := optString(arg, "--walker="); match {
 				if opts.WalkerOpts, err = parseWalkerOpts(value); err != nil {
 					return err

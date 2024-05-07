@@ -1,20 +1,26 @@
-<div align="center">
-<sup>Special thanks to:</sup>
-<br>
-<br>
-<a href="https://warp.dev/?utm_source=github&utm_medium=referral&utm_campaign=fzf_20240209">
-  <div>
-    <img src="https://raw.githubusercontent.com/junegunn/i/master/warp.png" width="300" alt="Warp">
-  </div>
-  <b>Warp is a modern, Rust-based terminal with AI built in so you and your team can build great software, faster.</b>
-  <div>
-    <sup>Visit warp.dev to learn more.</sup>
-  </div>
-</a>
-<br>
-<hr>
-</div>
-<br>
+# Fzf, with websockets
+
+A fork of fzf that supports websockets as a source of inter-process communication.
+
+This fork is intended for those of you who are interested in building some kind of tools that revolves around fzf. Before the existence of this fork, there is no clean ways to subscribe to the "state" of fzf (e.g. the current query, the current selection, etc.) from another process. This fork aims to solve this problem by providing the options to spawn a websocket server that you can connect to.
+
+There is currently two "implementations" of the websocket server. Either you can spawn a server, or you can spawn a client that acts like a server. You might wonder, why would you want to spawn a client that acts like a server? This is partcularly useful if you want to spawn a fzf instance that connects to a websocket server right away.
+
+If you want to spawn a server, you can use the `--websocket-listen` option like so:
+```zsh
+FZF_API_KEY="key" fzf \
+  --websocket-listen="localhost:12010" \
+  --bind="start:websocket-broadcast@Hi from fzf@"
+```
+
+If you want to spawn a client that acts like a server, you can use the `--websocket-listen-to` option like so:
+```
+FZF_API_KEY="key" fzf \
+  --websocket-listen-to="ws://localhost:12010" \
+  --bind="start:websocket-broadcast@Hi from fzf@"
+```
+
+---
 
 <img src="https://raw.githubusercontent.com/junegunn/i/master/fzf.png" height="170" alt="fzf - a command-line fuzzy finder"> [![github-actions](https://github.com/junegunn/fzf/workflows/Test%20fzf%20on%20Linux/badge.svg)](https://github.com/junegunn/fzf/actions)
 ===

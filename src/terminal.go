@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net"
 	"os"
@@ -75,6 +76,16 @@ func init() {
 	// * https://en.wikipedia.org/wiki/Sixel
 	// * https://iterm2.com/documentation-images.html
 	passThroughRegex = regexp.MustCompile(`\x1bPtmux;\x1b\x1b.*?[^\x1b]\x1b\\|\x1b(_G|P[0-9;]*q).*?\x1b\\\r?|\x1b]1337;.*?(\a|\x1b\\)`)
+
+	logFilePath := os.Getenv("FZF_LOG_FILE_PATH")
+	if logFilePath == "" {
+		logFilePath = "/tmp/fzf.log"
+	}
+	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(logFile)
 }
 
 type jumpMode int
@@ -347,6 +358,18 @@ type Terminal struct {
 	clickHeaderLine    int
 	clickHeaderColumn  int
 	proxyScript        string
+
+	websocketListenAddr          *listenAddress
+	websocketListenPort          *int
+	websocketListenUnsafe        bool
+	websocketListenToAddr        *string
+	websocketListenToUnsafe      bool
+	websocketServer              *websocketServer
+	websocketServerInputChan     chan []*action
+	websocketServerBroadcastChan chan string
+	websocketClient              *websocketClient
+	websocketClientInputChan     chan []*action
+	websocketClientBroadcastChan chan string
 }
 
 type selectedItem struct {
@@ -514,6 +537,8 @@ const (
 	actBecome
 	actShowHeader
 	actHideHeader
+	actWebsocketBroadcast
+	actWebsocketStopReplay
 )
 
 func (a actionType) Name() string {
@@ -866,7 +891,17 @@ func NewTerminal(opts *Options, eventBox *util.EventBox, executor *util.Executor
 		initFunc:           func() error { return renderer.Init() },
 		executing:          util.NewAtomicBool(false),
 		lastAction:         actStart,
-		lastFocus:          minItem.Index()}
+		lastFocus:          minItem.Index(),
+
+		websocketServerInputChan:     make(chan []*action, 100),
+		websocketServerBroadcastChan: make(chan string),
+		websocketClientInputChan:     make(chan []*action, 100),
+		websocketClientBroadcastChan: make(chan string),
+		websocketListenAddr:          opts.WebsocketListenAddr,
+		websocketListenUnsafe:        opts.WebsocketUnsafe,
+		websocketListenToAddr:        opts.WebsocketListenToAddr,
+		websocketListenToUnsafe:      opts.WebsocketToUnsafe,
+	}
 	t.prompt, t.promptLen = t.parsePrompt(opts.Prompt)
 	// Pre-calculated empty pointer and marker signs
 	t.pointerEmpty = strings.Repeat(" ", t.pointerLen)
@@ -936,6 +971,23 @@ func NewTerminal(opts *Options, eventBox *util.EventBox, executor *util.Executor
 		}
 		t.listener = listener
 		t.listenPort = &port
+	}
+
+	if t.websocketListenAddr != nil {
+		port, err, websocketServer := startWebsocketServer(*t.websocketListenAddr, t.websocketServerInputChan, t.websocketServerBroadcastChan)
+		if err != nil {
+			return nil, err
+		}
+		t.websocketServer = websocketServer
+		t.websocketListenPort = &port
+	}
+
+	if t.websocketListenToAddr != nil {
+		err, websocketClient := startWebsocketClient(*t.websocketListenToAddr, t.websocketClientInputChan, t.websocketClientBroadcastChan)
+		if err != nil {
+			return nil, err
+		}
+		t.websocketClient = websocketClient
 	}
 
 	if t.hasStartActions {
@@ -3924,6 +3976,12 @@ func (t *Terminal) Loop() error {
 					}
 				}
 			}
+		case newActions := <-t.websocketServerInputChan:
+			actions = append(actions, newActions...)
+			needBarrier = false
+		case newActions := <-t.websocketClientInputChan:
+			actions = append(actions, newActions...)
+			needBarrier = false
 		}
 
 		t.mutex.Lock()
@@ -4784,6 +4842,20 @@ func (t *Terminal) Loop() error {
 							break
 						}
 					}
+				}
+			case actWebsocketBroadcast:
+				if t.websocketListenPort != nil {
+					valid, list := t.buildPlusList(a.a, false)
+					if valid {
+						message, _ := t.replacePlaceholder(a.a, false, string(t.input), list)
+						t.websocketServerBroadcastChan <- message
+					}
+				}
+			case actWebsocketStopReplay:
+				if t.websocketListenPort != nil {
+					t.websocketServer.replayMutex.Lock()
+					t.websocketServer.replay = false
+					t.websocketServer.replayMutex.Unlock()
 				}
 			}
 
