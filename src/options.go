@@ -290,83 +290,85 @@ type walkerOpts struct {
 
 // Options stores the values of command-line options
 type Options struct {
-	Bash         bool
-	Zsh          bool
-	Fish         bool
-	Fuzzy        bool
-	FuzzyAlgo    algo.Algo
-	Scheme       string
-	Extended     bool
-	Phony        bool
-	Case         Case
-	Normalize    bool
-	Nth          []Range
-	WithNth      []Range
-	Delimiter    Delimiter
-	Sort         int
-	Track        trackOption
-	Tac          bool
-	Criteria     []criterion
-	Multi        int
-	Ansi         bool
-	Mouse        bool
-	Theme        *tui.ColorTheme
-	Black        bool
-	Bold         bool
-	Height       heightSpec
-	MinHeight    int
-	Layout       layoutType
-	Cycle        bool
-	KeepRight    bool
-	Hscroll      bool
-	HscrollOff   int
-	ScrollOff    int
-	FileWord     bool
-	InfoStyle    infoStyle
-	InfoPrefix   string
-	Separator    *string
-	JumpLabels   string
-	Prompt       string
-	Pointer      string
-	Marker       string
-	Query        string
-	Select1      bool
-	Exit0        bool
-	Filter       *string
-	ToggleSort   bool
-	Expect       map[tui.Event]string
-	Keymap       map[tui.Event][]*action
-	Preview      previewOpts
-	PrintQuery   bool
-	ReadZero     bool
-	Printer      func(string)
-	PrintSep     string
-	Sync         bool
-	History      *History
-	Header       []string
-	HeaderLines  int
-	HeaderFirst  bool
-	Ellipsis     string
-	Scrollbar    *string
-	Margin       [4]sizeSpec
-	Padding      [4]sizeSpec
-	BorderShape  tui.BorderShape
-	BorderLabel  labelOpts
-	PreviewLabel labelOpts
-	Unicode      bool
-	Ambidouble   bool
-	Tabstop      int
-	ListenAddr   *listenAddress
-	Unsafe       bool
-	ClearOnExit  bool
-	WalkerOpts   walkerOpts
-	WalkerRoot   string
-	WalkerSkip   []string
-	Version      bool
-	CPUProfile   string
-	MEMProfile   string
-	BlockProfile string
-	MutexProfile string
+	Bash                bool
+	Zsh                 bool
+	Fish                bool
+	Fuzzy               bool
+	FuzzyAlgo           algo.Algo
+	Scheme              string
+	Extended            bool
+	Phony               bool
+	Case                Case
+	Normalize           bool
+	Nth                 []Range
+	WithNth             []Range
+	Delimiter           Delimiter
+	Sort                int
+	Track               trackOption
+	Tac                 bool
+	Criteria            []criterion
+	Multi               int
+	Ansi                bool
+	Mouse               bool
+	Theme               *tui.ColorTheme
+	Black               bool
+	Bold                bool
+	Height              heightSpec
+	MinHeight           int
+	Layout              layoutType
+	Cycle               bool
+	KeepRight           bool
+	Hscroll             bool
+	HscrollOff          int
+	ScrollOff           int
+	FileWord            bool
+	InfoStyle           infoStyle
+	InfoPrefix          string
+	Separator           *string
+	JumpLabels          string
+	Prompt              string
+	Pointer             string
+	Marker              string
+	Query               string
+	Select1             bool
+	Exit0               bool
+	Filter              *string
+	ToggleSort          bool
+	Expect              map[tui.Event]string
+	Keymap              map[tui.Event][]*action
+	Preview             previewOpts
+	PrintQuery          bool
+	ReadZero            bool
+	Printer             func(string)
+	PrintSep            string
+	Sync                bool
+	History             *History
+	Header              []string
+	HeaderLines         int
+	HeaderFirst         bool
+	Ellipsis            string
+	Scrollbar           *string
+	Margin              [4]sizeSpec
+	Padding             [4]sizeSpec
+	BorderShape         tui.BorderShape
+	BorderLabel         labelOpts
+	PreviewLabel        labelOpts
+	Unicode             bool
+	Ambidouble          bool
+	Tabstop             int
+	ListenAddr          *listenAddress
+	Unsafe              bool
+	WebsocketListenAddr *listenAddress
+	WebsocketUnsafe     bool
+	ClearOnExit         bool
+	WalkerOpts          walkerOpts
+	WalkerRoot          string
+	WalkerSkip          []string
+	Version             bool
+	CPUProfile          string
+	MEMProfile          string
+	BlockProfile        string
+	MutexProfile        string
 }
 
 func filterNonEmpty(input []string) []string {
@@ -1035,9 +1037,9 @@ func parseWalkerOpts(str string) walkerOpts {
 }
 
 var (
-	executeRegexp    *regexp.Regexp
-	splitRegexp      *regexp.Regexp
-	actionNameRegexp *regexp.Regexp
+	executeAndWebsocketBroadcastRegexp *regexp.Regexp
+	splitRegexp                        *regexp.Regexp
+	actionNameRegexp                   *regexp.Regexp
 )
 
 func firstKey(keymap map[tui.Event]string) tui.Event {
@@ -1054,8 +1056,8 @@ const (
 )
 
 func init() {
-	executeRegexp = regexp.MustCompile(
-		`(?si)[:+](become|execute(?:-multi|-silent)?|reload(?:-sync)?|preview|(?:change|transform)-(?:header|query|prompt|border-label|preview-label)|transform|change-preview-window|change-preview|(?:re|un)bind|pos|put)`)
+	executeAndWebsocketBroadcastRegexp = regexp.MustCompile(
+		`(?si)[:+](become|execute(?:-multi|-silent)?|websocket-broadcast|reload(?:-sync)?|preview|(?:change|transform)-(?:header|query|prompt|border-label|preview-label)|transform|change-preview-window|change-preview|(?:re|un)bind|pos|put)`)
 	splitRegexp = regexp.MustCompile("[,:]+")
 	actionNameRegexp = regexp.MustCompile("(?i)^[a-z-]+")
 }
@@ -1064,7 +1066,7 @@ func maskActionContents(action string) string {
 	masked := ""
 Loop:
 	for len(action) > 0 {
-		loc := executeRegexp.FindStringIndex(action)
+		loc := executeAndWebsocketBroadcastRegexp.FindStringIndex(action)
 		if loc == nil {
 			masked += action
 			break
@@ -1429,6 +1431,10 @@ func isExecuteAction(str string) actionType {
 		return actTransformPrompt
 	case "transform-query":
 		return actTransformQuery
+	case "websocket-broadcast":
+		return actWebsocketBroadcast
+	case "websocket-stop-replay":
+		return actWebsocketStopReplay
 	}
 	return actIgnore
 }
@@ -1968,6 +1974,18 @@ func parseOptions(opts *Options, allArgs []string) {
 		case "--no-listen", "--no-listen-unsafe":
 			opts.ListenAddr = nil
 			opts.Unsafe = false
+		case "--websocket-listen", "--websocket-listen-unsafe":
+			given, str := optionalNextString(allArgs, &i)
+			addr := defaultWebsocketListenAddr
+			if given {
+				var err error
+				addr, err = parseListenAddress(str)
+				if err != nil {
+					errorExit(err.Error())
+				}
+			}
+			opts.WebsocketListenAddr = &addr
+			opts.WebsocketUnsafe = arg == "--websocket-listen-unsafe"
 		case "--clear":
 			opts.ClearOnExit = true
 		case "--no-clear":
@@ -2083,6 +2101,20 @@ func parseOptions(opts *Options, allArgs []string) {
 				}
 				opts.ListenAddr = &addr
 				opts.Unsafe = true
+			} else if match, value := optString(arg, "--websocket-listen="); match {
+				addr, err := parseListenAddress(value)
+				if err != nil {
+					errorExit(err.Error())
+				}
+				opts.WebsocketListenAddr = &addr
+				opts.WebsocketUnsafe = false
+			} else if match, value := optString(arg, "--websocket-listen-unsafe="); match {
+				addr, err := parseListenAddress(value)
+				if err != nil {
+					errorExit(err.Error())
+				}
+				opts.WebsocketListenAddr = &addr
+				opts.WebsocketUnsafe = true
 			} else if match, value := optString(arg, "--walker="); match {
 				opts.WalkerOpts = parseWalkerOpts(value)
 			} else if match, value := optString(arg, "--walker-root="); match {
