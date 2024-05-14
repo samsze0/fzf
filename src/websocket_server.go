@@ -105,9 +105,9 @@ func (server *websocketServer) good(ws *websocket.Conn, message string) {
 }
 
 func (server *websocketServer) handleConnections(w http.ResponseWriter, r *http.Request) {
-	log.Println("new connection from", r.RemoteAddr, "with API-KEY", r.Header.Get("API-KEY"))
+	log.Println("new connection from", r.RemoteAddr, "with Fzf-Api-Key", r.Header.Get("Fzf-Api-Key"))
 
-	if r.Header.Get("API-KEY") != os.Getenv("FZF_API_KEY") {
+	if r.Header.Get("Fzf-Api-Key") != os.Getenv("FZF_API_KEY") {
 		w.WriteHeader(http.StatusUnauthorized) // 401
 		return
 	}
