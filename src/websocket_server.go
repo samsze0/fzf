@@ -17,7 +17,7 @@ import (
 func init() {
 	logFilePath := os.Getenv("FZF_LOG_FILE_PATH")
 	if logFilePath == "" {
-		logFilePath = "log.txt"
+		logFilePath = "/tmp/fzf.log"
 	}
 	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
