@@ -90,6 +90,7 @@ var upgrader = websocket.Upgrader{
 
 func (server *websocketServer) bad(ws *websocket.Conn, message string) {
 	response := fmt.Sprintf("bad %s", message)
+	log.Println("sending bad response to", server.clients[ws], ":", response)
 	err := ws.WriteMessage(websocket.TextMessage, []byte(response))
 	if err != nil {
 		delete(server.clients, ws)
@@ -98,6 +99,7 @@ func (server *websocketServer) bad(ws *websocket.Conn, message string) {
 
 func (server *websocketServer) good(ws *websocket.Conn, message string) {
 	response := fmt.Sprintf("good %s", message)
+	log.Println("sending good response to", server.clients[ws], ":", response)
 	err := ws.WriteMessage(websocket.TextMessage, []byte(response))
 	if err != nil {
 		delete(server.clients, ws)
