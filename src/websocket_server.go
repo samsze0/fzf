@@ -9,27 +9,13 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-func init() {
-	logFilePath := os.Getenv("FZF_LOG_FILE_PATH")
-	if logFilePath == "" {
-		logFilePath = "/tmp/fzf.log"
-	}
-	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Fatal(err)
-	}
-	log.SetOutput(logFile)
-}
-
 type websocketServer struct {
 	apiKey           []byte
 	actionChannel    chan []*action
-	responseChannel  chan string
 	clients          map[*websocket.Conn]string
 	broadcastChannel chan string
 	relayBuffer      []string
@@ -39,7 +25,7 @@ type websocketServer struct {
 
 var defaultWebsocketListenAddr = listenAddress{"localhost", 0}
 
-func startWebsocketServer(address listenAddress, actionChannel chan []*action, responseChannel chan string, broadcastChannel chan string) (int, error, *websocketServer) {
+func startWebsocketServer(address listenAddress, actionChannel chan []*action, broadcastChannel chan string) (int, error, *websocketServer) {
 	host := address.host
 	port := address.port
 	apiKey := os.Getenv("FZF_API_KEY")
@@ -56,7 +42,6 @@ func startWebsocketServer(address listenAddress, actionChannel chan []*action, r
 	server := websocketServer{
 		apiKey:           []byte(apiKey),
 		actionChannel:    actionChannel,
-		responseChannel:  responseChannel,
 		clients:          make(map[*websocket.Conn]string),
 		broadcastChannel: broadcastChannel,
 		relayBuffer:      make([]string, 0),
@@ -89,7 +74,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func (server *websocketServer) bad(ws *websocket.Conn, message string) {
-	response := fmt.Sprintf("bad %s", message)
+	response := fmt.Sprintf("[bad] %s", message)
 	log.Println("sending bad response to", server.clients[ws], ":", response)
 	err := ws.WriteMessage(websocket.TextMessage, []byte(response))
 	if err != nil {
@@ -98,7 +83,7 @@ func (server *websocketServer) bad(ws *websocket.Conn, message string) {
 }
 
 func (server *websocketServer) good(ws *websocket.Conn, message string) {
-	response := fmt.Sprintf("good %s", message)
+	response := fmt.Sprintf("[good] %s", message)
 	log.Println("sending good response to", server.clients[ws], ":", response)
 	err := ws.WriteMessage(websocket.TextMessage, []byte(response))
 	if err != nil {
@@ -157,19 +142,13 @@ func (server *websocketServer) handleConnections(w http.ResponseWriter, r *http.
 			server.bad(ws, "no action specified")
 			continue
 		}
-		select {
-		case response := <-server.responseChannel:
-			server.good(ws, response)
-			continue
-
-		case <-time.After(channelTimeout):
-			go func() {
-				// Drain the channel
-				<-server.responseChannel
-			}()
-			server.bad(ws, "timeout")
-			continue
+		actionNames := []string{}
+		for _, action := range actions {
+			actionNames = append(actionNames, action.t.Name())
 		}
+		log.Printf("received actions: %v", actionNames)
+
+		server.actionChannel <- actions
 	}
 }
 

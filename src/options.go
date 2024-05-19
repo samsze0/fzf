@@ -290,85 +290,87 @@ type walkerOpts struct {
 
 // Options stores the values of command-line options
 type Options struct {
-	Bash                bool
-	Zsh                 bool
-	Fish                bool
-	Fuzzy               bool
-	FuzzyAlgo           algo.Algo
-	Scheme              string
-	Extended            bool
-	Phony               bool
-	Case                Case
-	Normalize           bool
-	Nth                 []Range
-	WithNth             []Range
-	Delimiter           Delimiter
-	Sort                int
-	Track               trackOption
-	Tac                 bool
-	Criteria            []criterion
-	Multi               int
-	Ansi                bool
-	Mouse               bool
-	Theme               *tui.ColorTheme
-	Black               bool
-	Bold                bool
-	Height              heightSpec
-	MinHeight           int
-	Layout              layoutType
-	Cycle               bool
-	KeepRight           bool
-	Hscroll             bool
-	HscrollOff          int
-	ScrollOff           int
-	FileWord            bool
-	InfoStyle           infoStyle
-	InfoPrefix          string
-	Separator           *string
-	JumpLabels          string
-	Prompt              string
-	Pointer             string
-	Marker              string
-	Query               string
-	Select1             bool
-	Exit0               bool
-	Filter              *string
-	ToggleSort          bool
-	Expect              map[tui.Event]string
-	Keymap              map[tui.Event][]*action
-	Preview             previewOpts
-	PrintQuery          bool
-	ReadZero            bool
-	Printer             func(string)
-	PrintSep            string
-	Sync                bool
-	History             *History
-	Header              []string
-	HeaderLines         int
-	HeaderFirst         bool
-	Ellipsis            string
-	Scrollbar           *string
-	Margin              [4]sizeSpec
-	Padding             [4]sizeSpec
-	BorderShape         tui.BorderShape
-	BorderLabel         labelOpts
-	PreviewLabel        labelOpts
-	Unicode             bool
-	Ambidouble          bool
-	Tabstop             int
-	ListenAddr          *listenAddress
-	Unsafe              bool
-	WebsocketListenAddr *listenAddress
-	WebsocketUnsafe     bool
-	ClearOnExit         bool
-	WalkerOpts          walkerOpts
-	WalkerRoot          string
-	WalkerSkip          []string
-	Version             bool
-	CPUProfile          string
-	MEMProfile          string
-	BlockProfile        string
-	MutexProfile        string
+	Bash                  bool
+	Zsh                   bool
+	Fish                  bool
+	Fuzzy                 bool
+	FuzzyAlgo             algo.Algo
+	Scheme                string
+	Extended              bool
+	Phony                 bool
+	Case                  Case
+	Normalize             bool
+	Nth                   []Range
+	WithNth               []Range
+	Delimiter             Delimiter
+	Sort                  int
+	Track                 trackOption
+	Tac                   bool
+	Criteria              []criterion
+	Multi                 int
+	Ansi                  bool
+	Mouse                 bool
+	Theme                 *tui.ColorTheme
+	Black                 bool
+	Bold                  bool
+	Height                heightSpec
+	MinHeight             int
+	Layout                layoutType
+	Cycle                 bool
+	KeepRight             bool
+	Hscroll               bool
+	HscrollOff            int
+	ScrollOff             int
+	FileWord              bool
+	InfoStyle             infoStyle
+	InfoPrefix            string
+	Separator             *string
+	JumpLabels            string
+	Prompt                string
+	Pointer               string
+	Marker                string
+	Query                 string
+	Select1               bool
+	Exit0                 bool
+	Filter                *string
+	ToggleSort            bool
+	Expect                map[tui.Event]string
+	Keymap                map[tui.Event][]*action
+	Preview               previewOpts
+	PrintQuery            bool
+	ReadZero              bool
+	Printer               func(string)
+	PrintSep              string
+	Sync                  bool
+	History               *History
+	Header                []string
+	HeaderLines           int
+	HeaderFirst           bool
+	Ellipsis              string
+	Scrollbar             *string
+	Margin                [4]sizeSpec
+	Padding               [4]sizeSpec
+	BorderShape           tui.BorderShape
+	BorderLabel           labelOpts
+	PreviewLabel          labelOpts
+	Unicode               bool
+	Ambidouble            bool
+	Tabstop               int
+	ListenAddr            *listenAddress
+	Unsafe                bool
+	WebsocketListenAddr   *listenAddress
+	WebsocketUnsafe       bool
+	WebsocketListenToAddr *string
+	WebsocketToUnsafe     bool
+	ClearOnExit           bool
+	WalkerOpts            walkerOpts
+	WalkerRoot            string
+	WalkerSkip            []string
+	Version               bool
+	CPUProfile            string
+	MEMProfile            string
+	BlockProfile          string
+	MutexProfile          string
 }
 
 func filterNonEmpty(input []string) []string {
@@ -1986,6 +1988,13 @@ func parseOptions(opts *Options, allArgs []string) {
 			}
 			opts.WebsocketListenAddr = &addr
 			opts.WebsocketUnsafe = arg == "--websocket-listen-unsafe"
+		case "--websocket-listen-to", "--websocket-listen-to-unsafe":
+			given, str := optionalNextString(allArgs, &i)
+			if given {
+				addr := &str
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = arg == "--websocket-listen-to-unsafe"
+			}
 		case "--clear":
 			opts.ClearOnExit = true
 		case "--no-clear":
@@ -2115,6 +2124,14 @@ func parseOptions(opts *Options, allArgs []string) {
 				}
 				opts.WebsocketListenAddr = &addr
 				opts.WebsocketUnsafe = true
+			} else if match, value := optString(arg, "--websocket-listen-to="); match {
+				addr := &value
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = false
+			} else if match, value := optString(arg, "--websocket-listen-to-unsafe="); match {
+				addr := &value
+				opts.WebsocketListenToAddr = addr
+				opts.WebsocketToUnsafe = true
 			} else if match, value := optString(arg, "--walker="); match {
 				opts.WalkerOpts = parseWalkerOpts(value)
 			} else if match, value := optString(arg, "--walker-root="); match {

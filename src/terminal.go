@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -71,6 +72,16 @@ func init() {
 	// * https://en.wikipedia.org/wiki/Sixel
 	// * https://iterm2.com/documentation-images.html
 	passThroughRegex = regexp.MustCompile(`\x1bPtmux;\x1b\x1b.*?[^\x1b]\x1b\\|\x1b(_G|P[0-9;]*q).*?\x1b\\\r?|\x1b]1337;.*?(\a|\x1b\\)`)
+
+	logFilePath := os.Getenv("FZF_LOG_FILE_PATH")
+	if logFilePath == "" {
+		logFilePath = "/tmp/fzf.log"
+	}
+	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.SetOutput(logFile)
 }
 
 type jumpMode int
@@ -246,6 +257,8 @@ type Terminal struct {
 	websocketListenAddr          *listenAddress
 	websocketListenPort          *int
 	websocketListenUnsafe        bool
+	websocketListenToAddr        *string
+	websocketListenToUnsafe      bool
 	borderShape                  tui.BorderShape
 	cleanExit                    bool
 	paused                       bool
@@ -292,8 +305,10 @@ type Terminal struct {
 	eventChan                    chan tui.Event
 	websocketServer              *websocketServer
 	websocketServerInputChan     chan []*action
-	websocketServerOutputChan    chan string
 	websocketServerBroadcastChan chan string
+	websocketClient              *websocketClient
+	websocketClientInputChan     chan []*action
+	websocketClientBroadcastChan chan string
 	slab                         *util.Slab
 	theme                        *tui.ColorTheme
 	tui                          tui.Renderer
@@ -739,6 +754,8 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		listenUnsafe:                 opts.Unsafe,
 		websocketListenAddr:          opts.WebsocketListenAddr,
 		websocketListenUnsafe:        opts.WebsocketUnsafe,
+		websocketListenToAddr:        opts.WebsocketListenToAddr,
+		websocketListenToUnsafe:      opts.WebsocketToUnsafe,
 		borderShape:                  opts.BorderShape,
 		borderWidth:                  1,
 		borderLabel:                  nil,
@@ -787,8 +804,9 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 		serverOutputChan:             make(chan string),
 		eventChan:                    make(chan tui.Event, 6), // (load + result + zero|one) | (focus) | (resize) | (GetChar)
 		websocketServerInputChan:     make(chan []*action, 100),
-		websocketServerOutputChan:    make(chan string),
 		websocketServerBroadcastChan: make(chan string),
+		websocketClientInputChan:     make(chan []*action, 100),
+		websocketClientBroadcastChan: make(chan string),
 		tui:                          renderer,
 		initFunc:                     func() { renderer.Init() },
 		executing:                    util.NewAtomicBool(false),
@@ -850,12 +868,20 @@ func NewTerminal(opts *Options, eventBox *util.EventBox) *Terminal {
 	}
 
 	if t.websocketListenAddr != nil {
-		port, err, websocketServer := startWebsocketServer(*t.websocketListenAddr, t.websocketServerInputChan, t.websocketServerOutputChan, t.websocketServerBroadcastChan)
+		port, err, websocketServer := startWebsocketServer(*t.websocketListenAddr, t.websocketServerInputChan, t.websocketServerBroadcastChan)
 		if err != nil {
 			errorExit(err.Error())
 		}
 		t.websocketServer = websocketServer
 		t.websocketListenPort = &port
+	}
+
+	if t.websocketListenToAddr != nil {
+		err, websocketClient := startWebsocketClient(*t.websocketListenToAddr, t.websocketClientInputChan, t.websocketClientBroadcastChan)
+		if err != nil {
+			errorExit(err.Error())
+		}
+		t.websocketClient = websocketClient
 	}
 
 	return &t
@@ -3302,6 +3328,10 @@ func (t *Terminal) Loop() {
 				}
 
 				needBarrier = false
+			case newActions := <-t.websocketServerInputChan:
+				actions = append(actions, newActions...)
+			case newActions := <-t.websocketClientInputChan:
+				actions = append(actions, newActions...)
 			}
 		}
 
