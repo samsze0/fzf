@@ -3330,8 +3330,10 @@ func (t *Terminal) Loop() {
 				needBarrier = false
 			case newActions := <-t.websocketServerInputChan:
 				actions = append(actions, newActions...)
+				needBarrier = false
 			case newActions := <-t.websocketClientInputChan:
 				actions = append(actions, newActions...)
+				needBarrier = false
 			}
 		}
 
