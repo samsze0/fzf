@@ -122,13 +122,40 @@ func (server *websocketServer) handleConnections(w http.ResponseWriter, r *http.
 	}
 
 	for {
-		_, message, err := ws.ReadMessage()
+		messageType, message, err := ws.ReadMessage()
 		if err != nil {
 			delete(server.clients, ws)
 			break
 		}
 
 		log.Println("received message from", r.RemoteAddr, ":", string(message))
+
+		if messageType == websocket.CloseMessage {
+			delete(server.clients, ws)
+			break
+		}
+
+		if messageType == websocket.BinaryMessage {
+			log.Fatal("binary message is not supported")
+		}
+
+		if messageType == websocket.PingMessage {
+			err := ws.WriteMessage(websocket.PongMessage, nil)
+			if err != nil {
+				log.Printf("error: %v", err)
+				delete(server.clients, ws)
+				break
+			}
+			continue
+		}
+
+		if messageType == websocket.PongMessage {
+			continue
+		}
+
+		if messageType != websocket.TextMessage {
+			log.Fatal("unexpected message type", messageType)
+		}
 
 		errorMessage := ""
 		actions := parseSingleActionList(strings.Trim(string(message), "\r\n"), func(message string) {
