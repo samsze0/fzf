@@ -49,7 +49,19 @@ function FzfBaseInstanceMixin:setup_main_popup_top_border()
 
   local border_component_2 = main_popup.top_border_text:append("left")
 
-  local loading_icon_animation = { "◴", "◷", "◶", "◵" }
+  -- local loading_icon_animation = { "◴", "◷", "◶", "◵" }
+  local loading_icon_animation = {
+    "⠋",
+    "⠙",
+    "⠹",
+    "⠸",
+    "⠼",
+    "⠴",
+    "⠦",
+    "⠧",
+    "⠇",
+    "⠏",
+  }
   local loading_icon_animation_state = 1
   ---@type uv.uv_timer_t?
   local loading_icon_animation_timer
